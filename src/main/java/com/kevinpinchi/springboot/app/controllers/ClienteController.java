@@ -1,5 +1,9 @@
 package com.kevinpinchi.springboot.app.controllers;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Map;
 
 import javax.validation.Valid;
@@ -17,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.SessionAttributes;
 import org.springframework.web.bind.support.SessionStatus;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.kevinpinchi.springboot.app.entity.Cliente;
@@ -27,15 +32,15 @@ import com.kevinpinchi.springboot.app.util.paginator.PageRender;
 @SessionAttributes("cliente")
 public class ClienteController {
 
-	@Autowired	
+	@Autowired
 	private IClienteService clienteService;
 
 	@RequestMapping(value = "/listar", method = RequestMethod.GET)
-	public String list(@RequestParam (name =  "page", defaultValue="0") int page,  Model model) {
-		//Metodo para generar una lista con paginador
+	public String list(@RequestParam(name = "page", defaultValue = "0") int page, Model model) {
+		// Metodo para generar una lista con paginador
 		Pageable pageRequest = PageRequest.of(page, 5);
 		Page<Cliente> clientes = clienteService.findAll(pageRequest);
-		
+
 		PageRender<Cliente> pageRender = new PageRender<>("/listar", clientes);
 		model.addAttribute("titulo", "Listado de clientes");
 		model.addAttribute("clientes", clientes);
@@ -58,13 +63,13 @@ public class ClienteController {
 
 		if (id > 0) {
 			cliente = clienteService.findOne(id);
-			if(cliente == null){
-				flash.addFlashAttribute("error","¡El ID del cliente no existe en la base de datos!");
+			if (cliente == null) {
+				flash.addFlashAttribute("error", "¡El ID del cliente no existe en la base de datos!");
 				return "redirect:/listar";
 			}
 
 		} else {
-			flash.addFlashAttribute("error","¡El id del cliente no puede ser cero!");
+			flash.addFlashAttribute("error", "¡El id del cliente no puede ser cero!");
 			return "redirect:/listar";
 
 		}
@@ -74,27 +79,45 @@ public class ClienteController {
 	}
 
 	@RequestMapping(value = "/form", method = RequestMethod.POST)
-	public String guardar(@Valid Cliente cliente, BindingResult result, Model model,RedirectAttributes flash ,SessionStatus status) {
+	public String guardar(@Valid Cliente cliente, BindingResult result, Model model,
+			@RequestParam("file") MultipartFile foto, RedirectAttributes flash, SessionStatus status) {
 
 		if (result.hasErrors()) {
 			model.addAttribute("titulo", "Formulario de Cliente");
 			return "form";
 		}
-		
-		String mensajeFlash = (cliente.getId() != null)? "¡Cliente editado con éxito!" : "¡Cliente creado con éxito!";
-		
+
+		if (foto.isEmpty()) {
+
+			Path directorioRecursos = Paths.get("src//main//resources//static/uploads");
+			String rootPath = directorioRecursos.toFile().getAbsolutePath();
+			try {
+				byte[] bytes = foto.getBytes();
+				Path rutacompleta = Paths.get(rootPath + "//" + foto.getOriginalFilename());
+				// Aqui escribimos la imagen en el directorio uploads
+				Files.write(rutacompleta, bytes);
+				flash.addFlashAttribute("info", "Has subido correctamente" + foto.getOriginalFilename() + "");
+				//le pasamos el nombre de la foto al cliente
+				cliente.setFoto(foto.getOriginalFilename());
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+
+		String mensajeFlash = (cliente.getId() != null) ? "¡Cliente editado con éxito!" : "¡Cliente creado con éxito!";
+
 		clienteService.save(cliente);
 		status.setComplete();
-		flash.addFlashAttribute("success",mensajeFlash);
+		flash.addFlashAttribute("success", mensajeFlash);
 		return "redirect:listar";
 	}
 
 	@RequestMapping(value = "/eliminar/{id}")
-	public String eliminar(@PathVariable(value = "id") Long id,  RedirectAttributes flash) {
+	public String eliminar(@PathVariable(value = "id") Long id, RedirectAttributes flash) {
 
 		if (id > 0) {
 			clienteService.delete(id);
-			flash.addFlashAttribute("success","¡Cliente eliminado con éxito!");
+			flash.addFlashAttribute("success", "¡Cliente eliminado con éxito!");
 		}
 		return "redirect:/listar";
 	}
